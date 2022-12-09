@@ -27,7 +27,6 @@
 #include <chrono>
 #include <utility>
 
-#include "Log.h"
 #include "UTF8Helper.h"
 
 namespace McBopomofo {

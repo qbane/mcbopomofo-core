@@ -1,18 +1,18 @@
 cmake_minimum_required(VERSION 3.6)
 project(mcbopomofo VERSION 2.4)
 
-find_package(Fcitx5Core REQUIRED)
-find_package(Fcitx5Utils REQUIRED)
 find_package(fmt REQUIRED)
 find_package(Gettext REQUIRED)
+# for McBopomofoApi
+find_package(GLIB2 REQUIRED)
 
 add_subdirectory(Engine/gramambular2)
+add_subdirectory(Engine/Mandarin)
 
 set(MCBOPOMOFO_LIB_SOURCES
+ api/McBopomofoApi.cpp
  KeyHandler.cpp
- LanguageModelLoader.cpp
  UTF8Helper.cpp
- Log.cpp  # Log is part of McBopomofoLib to facilitate debugging via logging.
  Engine/AssociatedPhrases.h
  Engine/AssociatedPhrases.cpp
  Engine/KeyValueBlobReader.cpp 
@@ -21,51 +21,48 @@ set(MCBOPOMOFO_LIB_SOURCES
  Engine/ParselessPhraseDB.cpp
  Engine/PhraseReplacementMap.cpp
  Engine/UserOverrideModel.cpp
- Engine/UserPhrasesLM.cpp
- Engine/Mandarin/Mandarin.cpp)
+ Engine/UserPhrasesLM.cpp)
 
 # https://stackoverflow.com/questions/26549137/shared-library-on-linux-and-fpic-error
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
 
 # Setup some compiler option that is generally useful and compatible with Fcitx 5 (C++17)
-include("${FCITX_INSTALL_CMAKECONFIG_DIR}/Fcitx5Utils/Fcitx5CompilerSettings.cmake")
+# include("${FCITX_INSTALL_CMAKECONFIG_DIR}/Fcitx5Utils/Fcitx5CompilerSettings.cmake")
+include("${CMAKE_SOURCE_DIR}/CompilerSettings.cmake")
 
 add_library(McBopomofoLib STATIC ${MCBOPOMOFO_LIB_SOURCES})
 target_compile_options(McBopomofoLib PRIVATE -Wno-unknown-pragmas)
-target_link_libraries(McBopomofoLib PRIVATE Fcitx5::Utils gramambular2_lib)
-target_include_directories(McBopomofoLib PRIVATE Fcitx5::Utils)
-target_compile_definitions(McBopomofoLib PRIVATE FCITX_GETTEXT_DOMAIN=\"fcitx5-mcbopomofo\")
+if (TARGET fmt::fmt-header-only)
+  target_link_libraries(McBopomofoLib PRIVATE fmt::fmt-header-only)
+else()
+  # old fmt libraries does not have cmake scripts for header-only usage
+  target_link_libraries(McBopomofoLib PRIVATE fmt::fmt)
+endif()
+target_link_libraries(McBopomofoLib PRIVATE gramambular2_lib)
+target_link_libraries(McBopomofoLib PRIVATE MandarinLib)
+# target_compile_definitions(McBopomofoLib PRIVATE FCITX_GETTEXT_DOMAIN=\"fcitx5-mcbopomofo\")
+# unused; may change in the future
+target_compile_definitions(McBopomofoLib PRIVATE GETTEXT_DOMAIN=\"fcitx5-mcbopomofo\")
 
+include_directories(${GLIB2_INCLUDE_DIRS})
 include_directories(Engine)
 include_directories(Engine/Gramambular)
 include_directories(Engine/Mandarin)
 
-add_library(mcbopomofo MODULE McBopomofo.cpp)
-# Use this to build McBopomofo on, for example, Ubuntu 20.04 LTS
-if (USE_LEGACY_FCITX5_API)
-    MESSAGE(STATUS "Using legacy (pre-2021) Fcitx5 API")
-    add_compile_definitions(mcbopomofo USE_LEGACY_FCITX5_API=1)
-endif()
-target_compile_options(mcbopomofo PRIVATE -Wno-unknown-pragmas)
-target_link_libraries(mcbopomofo PRIVATE Fcitx5::Core McBopomofoLib fmt::fmt)
-target_include_directories(mcbopomofo PRIVATE Fcitx5::Core fmt::fmt)
-set_target_properties(mcbopomofo PROPERTIES PREFIX "")
-target_compile_definitions(mcbopomofo PRIVATE FCITX_GETTEXT_DOMAIN=\"fcitx5-mcbopomofo\")
-install(TARGETS mcbopomofo DESTINATION "${FCITX_INSTALL_LIBDIR}/fcitx5")
+set (MCBOPOMOFO_CORE_DIR ${CMAKE_CURRENT_BINARY_DIR}/tmp)
+file(MAKE_DIRECTORY ${MCBOPOMOFO_CORE_DIR})
 
-# Addon config file
-# We need additional layer of conversion because we want PROJECT_VERSION in it.
-configure_file(mcbopomofo-addon.conf.in.in mcbopomofo-addon.conf.in)
-fcitx5_translate_desktop_file("${CMAKE_CURRENT_BINARY_DIR}/mcbopomofo-addon.conf.in" mcbopomofo-addon.conf)
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/mcbopomofo-addon.conf" RENAME mcbopomofo.conf DESTINATION "${FCITX_INSTALL_PKGDATADIR}/addon")
+# https://stackoverflow.com/a/37941544
+add_custom_target(combine_static_libs ALL
+  COMMAND ar -x $<TARGET_FILE:McBopomofoLib>
+  COMMAND ar -x $<TARGET_FILE:gramambular2_lib>
+  COMMAND ar -x $<TARGET_FILE:MandarinLib>
+  COMMAND ar -qcs ../libMcBopomofoCore.a *.o
+  WORKING_DIRECTORY ${MCBOPOMOFO_CORE_DIR}
+  DEPENDS McBopomofoLib gramambular2_lib MandarinLib)
+set_target_properties(combine_static_libs
+  PROPERTIES IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/libMcBopomofoCore.a)
 
-# Input Method registration file
-configure_file(mcbopomofo.conf.in.in mcbopomofo.conf.in)
-fcitx5_translate_desktop_file("${CMAKE_CURRENT_BINARY_DIR}/mcbopomofo.conf.in" mcbopomofo.conf)
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/mcbopomofo.conf" DESTINATION "${FCITX_INSTALL_PKGDATADIR}/inputmethod")
-configure_file(mcbopomofo-plain.conf.in.in mcbopomofo-plain.conf.in)
-fcitx5_translate_desktop_file("${CMAKE_CURRENT_BINARY_DIR}/mcbopomofo-plain.conf.in" mcbopomofo-plain.conf)
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/mcbopomofo-plain.conf" DESTINATION "${FCITX_INSTALL_PKGDATADIR}/inputmethod")
 
 if (ENABLE_TEST)
     # Let CMake fetch Google Test for us.
@@ -87,8 +84,7 @@ if (ENABLE_TEST)
     add_executable(McBopomofoTest
             KeyHandlerTest.cpp)
     target_compile_options(McBopomofoTest PRIVATE -Wno-unknown-pragmas)
-    target_link_libraries(McBopomofoTest PRIVATE Fcitx5::Core gtest_main gmock_main McBopomofoLib)
-    target_include_directories(McBopomofoTest PRIVATE Fcitx5::Core)
+    target_link_libraries(McBopomofoTest PRIVATE gtest_main gmock_main McBopomofoLib)
 
     configure_file(../data/data.txt mcbopomofo-test-data.txt)
 

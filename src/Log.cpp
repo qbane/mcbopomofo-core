@@ -23,4 +23,4 @@
 
 #include "Log.h"
 
-FCITX_DEFINE_LOG_CATEGORY(mcbopomofo_log, "mcbopomofo");
+// FCITX_DEFINE_LOG_CATEGORY(mcbopomofo_log, "mcbopomofo");

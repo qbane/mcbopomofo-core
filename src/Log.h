@@ -24,11 +24,12 @@
 #ifndef SRC_LOG_H_
 #define SRC_LOG_H_
 
-#include <fcitx-utils/log.h>
+// #include <fcitx-utils/log.h>
+#include <iostream>
 
-FCITX_DECLARE_LOG_CATEGORY(mcbopomofo_log);
+// FCITX_DECLARE_LOG_CATEGORY(mcbopomofo_log);
 
-#define FCITX_MCBOPOMOFO_WARN() FCITX_LOGC(::mcbopomofo_log, Warn)
-#define FCITX_MCBOPOMOFO_INFO() FCITX_LOGC(::mcbopomofo_log, Info)
+#define FCITX_MCBOPOMOFO_WARN() std::cerr // FCITX_LOGC(::mcbopomofo_log, Warn)
+#define FCITX_MCBOPOMOFO_INFO() std::cout // FCITX_LOGC(::mcbopomofo_log, Info)
 
 #endif

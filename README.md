@@ -1,6 +1,17 @@
+# McBopomofoCore
+
+> 此專案為[小麥注音輸入法 fcitx 版]()的一個分叉，用以維護其核心引擎以及提供 C API，方便移植到不同輸入法框架。<br>
+> **請注意這些 C API 仍在實驗階段，將隨時變動。**
+
+---
+
+> 以下為原始 README 內容
+
+---
+
 # fcitx5-mcbopomofo: 小麥注音輸入法 fcitx5 模組
 
-![Build](https://github.com/openvanilla/fcitx5-mcbopomofo/actions/workflows/ci.yaml/badge.svg)
+<!-- ![Build](https://github.com/openvanilla/fcitx5-mcbopomofo/actions/workflows/ci.yaml/badge.svg) -->
 
 本專案是[小麥注音](https://github.com/openvanilla/McBopomofo)的 Linux 版本，功能與小麥注音 macOS 版同步：
 

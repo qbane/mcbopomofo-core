@@ -1,3 +1,5 @@
+# TODO: change namespace
+
 xgettext \
 	--package-name=fcitx5-mcbopomofo \
 	--package-version=v0.1 \
