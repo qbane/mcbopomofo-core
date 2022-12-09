@@ -9,6 +9,7 @@ extern "C" {
 #include "McBopomofoApi.h"
 }
 
+#include "LocalizedStrings.hpp"
 #include "../Key.h"
 #include "../KeyHandler.h"
 #include "../LanguageModelLoader.h"
@@ -18,68 +19,27 @@ struct _McbpmfApiCore {
   GObject parent;
   McBopomofo::KeyHandler* keyhandler;
   std::unique_ptr<McBopomofo::InputState> state;
+  // const char* lm_path;
 };
+G_DEFINE_TYPE(McbpmfApiCore, mcbpmf_api_core, G_TYPE_OBJECT)
 
 struct _McbpmfApiKeyDef {
   GObject parent;
   McBopomofo::Key* body;
 };
+G_DEFINE_TYPE(McbpmfApiKeyDef, mcbpmf_api_keydef, G_TYPE_OBJECT)
+
 struct _McbpmfApiInputState {
   GObject parent;
   McBopomofo::InputState* body;
 };
-
-class DummyUserPhraseAdder : public McBopomofo::UserPhraseAdder {
- public:
-  void addUserPhrase([[maybe_unused]] const std::string_view& reading,
-                     [[maybe_unused]] const std::string_view& phrase) {
-  }
-};
-
-class KeyHandlerLocalizedString : public McBopomofo::KeyHandler::LocalizedStrings {
- public:
-  std::string cursorIsBetweenSyllables(
-    const std::string& prevReading, const std::string& nextReading) override {
-    return fmt::format(_("Cursor is between syllables {0} and {1}"),
-                       prevReading, nextReading);
-  }
-
-  std::string syllablesRequired(size_t syllables) override {
-    return fmt::format(_("{0} syllables required"), std::to_string(syllables));
-  }
-
-  std::string syllablesMaximum(size_t syllables) override {
-    return fmt::format(_("{0} syllables maximum"), std::to_string(syllables));
-  }
-
-  std::string phraseAlreadyExists() override {
-    return _("phrase already exists");
-  }
-
-  std::string pressEnterToAddThePhrase() override {
-    return _("press Enter to add the phrase");
-  }
-
-  std::string markedWithSyllablesAndStatus(const std::string& marked,
-                                           const std::string& readingUiText,
-                                           const std::string& status) override {
-    return fmt::format(_("Marked: {0}, syllables: {1}, {2}"), marked,
-                       readingUiText, status);
-  }
-};
+G_DEFINE_TYPE(McbpmfApiInputState, mcbpmf_api_input_state, G_TYPE_OBJECT)
 
 #define __MSTATE_CAST_TO(x, t) (dynamic_cast<McBopomofo::InputStates::t*>(x))
 #define __MSTATE_CASTABLE(x, t) (__MSTATE_CAST_TO(x, t) != nullptr)
-McbpmfInputStateType mcbpmf_api_state_get_type(McbpmfApiInputState* _ptr) {
-  auto ptr = _ptr->body;
-#define X(name, elt)                   \
-  if (__MSTATE_CASTABLE(ptr, elt)) {   \
-    return _MSTATE_TYPE_TO_ENUM(name); \
-  }
-  _MSTATE_TYPE_LIST
-#undef X
-  return MSTATE_TYPE_N;
-}
+
+static void mcbpmf_api_core_class_init(McbpmfApiCoreClass*) {}
+static void mcbpmf_api_core_init(McbpmfApiCore*) {}
 
 McbpmfApiCore* mcbpmf_api_core_new(void) {
   // from McBopomofoEngine::constructor, set as initial state
@@ -87,13 +47,14 @@ McbpmfApiCore* mcbpmf_api_core_new(void) {
 
   auto ret = reinterpret_cast<McbpmfApiCore*>(g_object_new(MCBPMF_API_TYPE_CORE, NULL));
   ret->state.swap(emptyState);
+  // ret->lm_path = lm_path;
   return ret;
 }
 
-void mcbpmf_api_core_init(McbpmfApiCore* _core, const char* lm_path) {
+void mcbpmf_api_core_init_(McbpmfApiCore* _core, const char* lm_path) {
   std::shared_ptr<McBopomofo::McBopomofoLM> lm(new McBopomofo::McBopomofoLM());
   std::shared_ptr<McBopomofo::UserPhraseAdder> upa(new DummyUserPhraseAdder());
-  std::unique_ptr<McBopomofo::KeyHandler::LocalizedStrings> lstr(new KeyHandlerLocalizedString());
+  std::unique_ptr<McBopomofo::KeyHandler::LocalizedStrings> lstr(new KeyHandlerLocalizedStrings());
 
   lm->setPhraseReplacementEnabled(false);
   lm->setExternalConverterEnabled(false);
@@ -103,6 +64,9 @@ void mcbpmf_api_core_init(McbpmfApiCore* _core, const char* lm_path) {
   auto core = new McBopomofo::KeyHandler(lm, upa, std::move(lstr));
 
   // -- TODO: keyHandler::setOnAddNewPhrase and addScriptHook
+  core->setOnAddNewPhrase([](const std::string& phrase) {
+    std::cerr << fmt::format("khdl callback: added new phrase [{0}] !!", phrase) << std::endl;
+  });
 
   // McBopomofoEngine::activate(entry, event)
   // TODO: detect engine_name to set to PlainBopomofo
@@ -129,39 +93,57 @@ void mcbpmf_api_core_init(McbpmfApiCore* _core, const char* lm_path) {
 }
 
 void mcbpmf_api_core_destroy(McbpmfApiCore* ptr) {
+  delete ptr->state.release();
   delete ptr->keyhandler;
 }
 
 McbpmfApiInputState* mcbpmf_api_core_get_state(McbpmfApiCore* core) {
-  return reinterpret_cast<McbpmfApiInputState*>(core->state.get());
+  return mcbpmf_api_input_state_new(core->state.get());
 }
 
 void mcbpmf_api_core_set_state(McbpmfApiCore* core, McbpmfApiInputState* _state) {
   core->state.reset(_state->body);
 }
 
-void mcbpmf_api_core_reset_state(McbpmfApiCore* core) {
+void mcbpmf_api_core_reset_state(McbpmfApiCore* core, bool full_reset) {
   core->state.reset(new McBopomofo::InputStates::Empty());
+  if (full_reset) {
+    core->keyhandler->reset();
+  }
+}
+
+// this method is private
+// size_t mcbpmf_api_key_handler_get_actual_cursor_pos(key_handler_t* khdl) {
+//   return khdl->real->actualCandidateCursorIndex();
+// }
+
+static void mcbpmf_api_input_state_class_init(McbpmfApiInputStateClass*) {}
+static void mcbpmf_api_input_state_init(McbpmfApiInputState*) {}
+
+static McbpmfApiInputState* mcbpmf_api_input_state_new(void* s) {
+  auto p = reinterpret_cast<McbpmfApiInputState*>(g_object_new(MCBPMF_API_TYPE_INPUT_STATE, NULL));
+  p->body = reinterpret_cast<McBopomofo::InputState*>(s);
+  return p;
 }
 
 // McBopomofoEngine::keyEvent
-bool mcbpmf_api_keyhandler_handle_key(
-  McbpmfApiCore* core, McbpmfApiKeyDef* key, McbpmfApiInputState** _result, bool* has_error) {
+bool mcbpmf_api_core_handle_key(
+  McbpmfApiCore* core, McbpmfApiKeyDef* key, McbpmfApiInputState** result, bool* has_error) {
   // NOTE: go to candidate phase if state is InputStates::ChoosingCandidate
   // use "handleCandidateKeyEvent"
-
-  auto result = reinterpret_cast<McBopomofo::InputState**>(&(*_result)->body);
 
   if (has_error) *has_error = false;
 
   bool accepted = core->keyhandler->handle(
     *key->body, core->state.get(),
     [&](std::unique_ptr<McBopomofo::InputState> next) {
-      *result = next.release();
-      // TODO: identify the type of next state and act accordingly
+      if (*result) g_object_unref(reinterpret_cast<GObject*>(*result));
+      *result = mcbpmf_api_input_state_new(next.release());
+      // TODO: the callback function maybe called more than once
       // McBopomofoEngine::enterNewState(context, std::move(next));
     },
     [&]() {
+      if (*result) g_object_unref(reinterpret_cast<GObject*>(*result));
       *result = nullptr;
       if (has_error) *has_error = true;
     });
@@ -171,15 +153,14 @@ bool mcbpmf_api_keyhandler_handle_key(
 
 // keyHandler::candidateSelected or keyHandler::candidatePanelCancelled
 bool mcbpmf_api_core_select_candidate(
-  McbpmfApiCore* core, int which, McbpmfApiInputState** _result) {
+  McbpmfApiCore* core, int which, McbpmfApiInputState** result) {
   auto statePtr = __MSTATE_CAST_TO(core->state.get(), ChoosingCandidate);
   if (statePtr == nullptr) return false;
   auto& cands = statePtr->candidates;
 
-  auto result = reinterpret_cast<McBopomofo::InputState**>(&(*_result)->body);
-
   auto cb = [&](std::unique_ptr<McBopomofo::InputState> next) {
-    *result = next.release();
+    if (*result) g_object_unref(reinterpret_cast<GObject*>(*result));
+    *result = mcbpmf_api_input_state_new(next.release());
   };
 
   if (which < 0) {
@@ -209,6 +190,9 @@ static const McBopomofo::Key::KeyName MKEY_LIST[] = {
 #undef __KEYNAME
 static constexpr int MKEY_LIST_LENGTH = sizeof(MKEY_LIST) / sizeof(McBopomofo::Key::KeyName);
 
+static void mcbpmf_api_keydef_class_init(McbpmfApiKeyDefClass*) {}
+static void mcbpmf_api_keydef_init(McbpmfApiKeyDef*) {}
+
 McbpmfApiKeyDef* mcbpmf_api_keydef_new_ascii(char c, unsigned char mods) {
   auto p = reinterpret_cast<McbpmfApiKeyDef*>(g_object_new(MCBPMF_API_TYPE_KEYDEF, NULL));
   p->body = new auto(McBopomofo::Key::asciiKey(c, mods & MKEY_SHIFT_MASK, mods & MKEY_CTRL_MASK));
@@ -226,6 +210,17 @@ void mcbpmf_api_keydef_destroy(McbpmfApiKeyDef* p) {
   delete p->body;
 }
 
+McbpmfInputStateType mcbpmf_api_state_get_type(McbpmfApiInputState* _ptr) {
+  auto ptr = _ptr->body;
+#define X(name, elt)                   \
+  if (__MSTATE_CASTABLE(ptr, elt)) {   \
+    return _MSTATE_TYPE_TO_ENUM(name); \
+  }
+  _MSTATE_TYPE_LIST
+#undef X
+  return MSTATE_TYPE_N;
+}
+
 bool mcbpmf_api_state_is_empty(McbpmfApiInputState* _state) {
   auto state = _state->body;
   // use "!__MSTATE_CASTABLE(state, NonEmpty)" will produce wrong result!
@@ -234,6 +229,7 @@ bool mcbpmf_api_state_is_empty(McbpmfApiInputState* _state) {
          __MSTATE_CASTABLE(state, Committing);
 }
 
+// TODO: serialize peek_xxx into gvariants to prevent multiple castings
 const char* mcbpmf_api_state_peek_buf(McbpmfApiInputState* _state) {
   auto state = _state->body;
   // McBopomofoEngine::handleInputtingState
@@ -256,12 +252,20 @@ int mcbpmf_api_state_peek_index(McbpmfApiInputState* _state) {
   return -1;
 }
 
+const char* mcbpmf_api_state_peek_tooltip(McbpmfApiInputState* _state) {
+  auto state = _state->body;
+  if (auto nonempty = __MSTATE_CAST_TO(state, NotEmpty)) {
+    return nonempty->tooltip.c_str();
+  }
+  return nullptr;
+}
+
+// TODO: return a slice of it
 GPtrArray* mcbpmf_api_state_get_candidates(McbpmfApiInputState* _state) {
   auto state = _state->body;
   if (auto choosing = __MSTATE_CAST_TO(state, ChoosingCandidate)) {
     auto& cs = choosing->candidates;
-    // the container should be freed by consumer
-    auto ret = g_ptr_array_new_full(cs.size() * 2, g_free);
+    auto ret = g_ptr_array_new_full(cs.size() * 2, nullptr);
     for (const auto& c : cs) {
       // FIXME: I don't know how to do this in C++ style
       g_ptr_array_add(ret, (gpointer)c.reading.c_str());

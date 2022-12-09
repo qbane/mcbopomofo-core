@@ -25,12 +25,12 @@ typedef enum {
 } McbpmfApiKeyModifiers;
 
 McbpmfApiCore* mcbpmf_api_core_new(void);
-void mcbpmf_api_core_init(McbpmfApiCore*, const char*);
+void mcbpmf_api_core_init_(McbpmfApiCore*, const char* lm_path);
 void mcbpmf_api_core_destroy(McbpmfApiCore*);
 
 McbpmfApiInputState* mcbpmf_api_core_get_state(McbpmfApiCore*);
 void mcbpmf_api_core_set_state(McbpmfApiCore*, McbpmfApiInputState*);
-void mcbpmf_api_core_reset_state(McbpmfApiCore*);
+void mcbpmf_api_core_reset_state(McbpmfApiCore*, bool full_reset = true);
 bool mcbpmf_api_core_handle_key(McbpmfApiCore*, McbpmfApiKeyDef*, McbpmfApiInputState**, bool*);
 bool mcbpmf_api_core_select_candidate(McbpmfApiCore*, int, McbpmfApiInputState**);
 
@@ -55,10 +55,12 @@ typedef enum {
 #undef X
 } McbpmfInputStateType;
 
+static McbpmfApiInputState* mcbpmf_api_input_state_new(void*);
 McbpmfInputStateType mcbpmf_api_state_get_type(McbpmfApiInputState*);
 bool mcbpmf_api_state_is_empty(McbpmfApiInputState*);
 const char* mcbpmf_api_state_peek_buf(McbpmfApiInputState*);
 int mcbpmf_api_state_peek_index(McbpmfApiInputState*);
+const char* mcbpmf_api_state_peek_tooltip(McbpmfApiInputState*);
 GPtrArray* mcbpmf_api_state_get_candidates(McbpmfApiInputState*);
 
 G_END_DECLS
