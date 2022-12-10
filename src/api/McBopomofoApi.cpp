@@ -30,16 +30,11 @@ struct _McbpmfApiKeyDef {
 G_DEFINE_TYPE(McbpmfApiKeyDef, mcbpmf_api_keydef, G_TYPE_OBJECT)
 
 struct _McbpmfApiInputState {
-  GObject parent;
-  McBopomofo::InputState* body;
+  McBopomofo::InputState self;
 };
-G_DEFINE_TYPE(McbpmfApiInputState, mcbpmf_api_input_state, G_TYPE_OBJECT)
 
 #define __MSTATE_CAST_TO(x, t) (dynamic_cast<McBopomofo::InputStates::t*>(x))
 #define __MSTATE_CASTABLE(x, t) (__MSTATE_CAST_TO(x, t) != nullptr)
-
-static void mcbpmf_api_core_class_init(McbpmfApiCoreClass*) {}
-static void mcbpmf_api_core_init(McbpmfApiCore*) {}
 
 McbpmfApiCore* mcbpmf_api_core_new(void) {
   // from McBopomofoEngine::constructor, set as initial state
@@ -92,17 +87,19 @@ void mcbpmf_api_core_init_(McbpmfApiCore* _core, const char* lm_path) {
   _core->keyhandler = core;
 }
 
-void mcbpmf_api_core_destroy(McbpmfApiCore* ptr) {
+static void mcbpmf_api_core_finalize(GObject* _ptr) {
+  auto *ptr = G_TYPE_CHECK_INSTANCE_CAST(_ptr, MCBPMF_API_TYPE_CORE, McbpmfApiCore);
   delete ptr->state.release();
   delete ptr->keyhandler;
+  G_OBJECT_CLASS(mcbpmf_api_core_parent_class)->finalize(_ptr);
 }
 
 McbpmfApiInputState* mcbpmf_api_core_get_state(McbpmfApiCore* core) {
-  return mcbpmf_api_input_state_new(core->state.get());
+  return reinterpret_cast<McbpmfApiInputState*>(core->state.get());
 }
 
 void mcbpmf_api_core_set_state(McbpmfApiCore* core, McbpmfApiInputState* _state) {
-  core->state.reset(_state->body);
+  core->state.reset(reinterpret_cast<McBopomofo::InputState*>(_state));
 }
 
 void mcbpmf_api_core_reset_state(McbpmfApiCore* core, bool full_reset) {
@@ -112,38 +109,33 @@ void mcbpmf_api_core_reset_state(McbpmfApiCore* core, bool full_reset) {
   }
 }
 
+static void mcbpmf_api_core_class_init(McbpmfApiCoreClass* klass) {
+  G_OBJECT_CLASS(klass)->finalize = mcbpmf_api_core_finalize;
+}
+static void mcbpmf_api_core_init(McbpmfApiCore*) {}
+
 // this method is private
 // size_t mcbpmf_api_key_handler_get_actual_cursor_pos(key_handler_t* khdl) {
 //   return khdl->real->actualCandidateCursorIndex();
 // }
 
-static void mcbpmf_api_input_state_class_init(McbpmfApiInputStateClass*) {}
-static void mcbpmf_api_input_state_init(McbpmfApiInputState*) {}
-
-static McbpmfApiInputState* mcbpmf_api_input_state_new(void* s) {
-  auto p = reinterpret_cast<McbpmfApiInputState*>(g_object_new(MCBPMF_API_TYPE_INPUT_STATE, NULL));
-  p->body = reinterpret_cast<McBopomofo::InputState*>(s);
-  return p;
-}
-
 // McBopomofoEngine::keyEvent
 bool mcbpmf_api_core_handle_key(
-  McbpmfApiCore* core, McbpmfApiKeyDef* key, McbpmfApiInputState** result, bool* has_error) {
+  McbpmfApiCore* core, McbpmfApiKeyDef* key, McbpmfApiInputState** _result, bool* has_error) {
   // NOTE: go to candidate phase if state is InputStates::ChoosingCandidate
   // use "handleCandidateKeyEvent"
+  auto result = reinterpret_cast<McBopomofo::InputState**>(_result);
 
   if (has_error) *has_error = false;
 
   bool accepted = core->keyhandler->handle(
     *key->body, core->state.get(),
     [&](std::unique_ptr<McBopomofo::InputState> next) {
-      if (*result) g_object_unref(reinterpret_cast<GObject*>(*result));
-      *result = mcbpmf_api_input_state_new(next.release());
+      *result = next.release();
       // TODO: the callback function maybe called more than once
       // McBopomofoEngine::enterNewState(context, std::move(next));
     },
     [&]() {
-      if (*result) g_object_unref(reinterpret_cast<GObject*>(*result));
       *result = nullptr;
       if (has_error) *has_error = true;
     });
@@ -153,14 +145,15 @@ bool mcbpmf_api_core_handle_key(
 
 // keyHandler::candidateSelected or keyHandler::candidatePanelCancelled
 bool mcbpmf_api_core_select_candidate(
-  McbpmfApiCore* core, int which, McbpmfApiInputState** result) {
+  McbpmfApiCore* core, int which, McbpmfApiInputState** _result) {
   auto statePtr = __MSTATE_CAST_TO(core->state.get(), ChoosingCandidate);
   if (statePtr == nullptr) return false;
   auto& cands = statePtr->candidates;
 
+  auto result = reinterpret_cast<McBopomofo::InputState**>(_result);
+
   auto cb = [&](std::unique_ptr<McBopomofo::InputState> next) {
-    if (*result) g_object_unref(reinterpret_cast<GObject*>(*result));
-    *result = mcbpmf_api_input_state_new(next.release());
+    *result = next.release();
   };
 
   if (which < 0) {
@@ -190,9 +183,6 @@ static const McBopomofo::Key::KeyName MKEY_LIST[] = {
 #undef __KEYNAME
 static constexpr int MKEY_LIST_LENGTH = sizeof(MKEY_LIST) / sizeof(McBopomofo::Key::KeyName);
 
-static void mcbpmf_api_keydef_class_init(McbpmfApiKeyDefClass*) {}
-static void mcbpmf_api_keydef_init(McbpmfApiKeyDef*) {}
-
 McbpmfApiKeyDef* mcbpmf_api_keydef_new_ascii(char c, unsigned char mods) {
   auto p = reinterpret_cast<McbpmfApiKeyDef*>(g_object_new(MCBPMF_API_TYPE_KEYDEF, NULL));
   p->body = new auto(McBopomofo::Key::asciiKey(c, mods & MKEY_SHIFT_MASK, mods & MKEY_CTRL_MASK));
@@ -206,12 +196,19 @@ McbpmfApiKeyDef* mcbpmf_api_keydef_new_named(int mkey, unsigned char mods) {
   return p;
 }
 
-void mcbpmf_api_keydef_destroy(McbpmfApiKeyDef* p) {
-  delete p->body;
+static void mcbpmf_api_keydef_finalize(GObject* _ptr) {
+  auto ptr = G_TYPE_CHECK_INSTANCE_CAST(_ptr, MCBPMF_API_TYPE_KEYDEF, McbpmfApiKeyDef);
+  delete ptr->body;
+  G_OBJECT_CLASS(mcbpmf_api_keydef_parent_class)->finalize(_ptr);
 }
 
+static void mcbpmf_api_keydef_class_init(McbpmfApiKeyDefClass* klass) {
+  G_OBJECT_CLASS(klass)->finalize = mcbpmf_api_keydef_finalize;
+}
+static void mcbpmf_api_keydef_init(McbpmfApiKeyDef*) {}
+
 McbpmfInputStateType mcbpmf_api_state_get_type(McbpmfApiInputState* _ptr) {
-  auto ptr = _ptr->body;
+  auto ptr = reinterpret_cast<McBopomofo::InputState*>(_ptr);
 #define X(name, elt)                   \
   if (__MSTATE_CASTABLE(ptr, elt)) {   \
     return _MSTATE_TYPE_TO_ENUM(name); \
@@ -221,8 +218,11 @@ McbpmfInputStateType mcbpmf_api_state_get_type(McbpmfApiInputState* _ptr) {
   return MSTATE_TYPE_N;
 }
 
+// FIXME: it is hard to decouple the input state implementation from the
+// key handler, so we leave it an opauqe pointer to the comsumer. Ideally
+// it should be a boxed type in terms of GObject.
 bool mcbpmf_api_state_is_empty(McbpmfApiInputState* _state) {
-  auto state = _state->body;
+  auto state = reinterpret_cast<McBopomofo::InputState*>(_state);
   // use "!__MSTATE_CASTABLE(state, NonEmpty)" will produce wrong result!
   return __MSTATE_CASTABLE(state, Empty) ||
          __MSTATE_CASTABLE(state, EmptyIgnoringPrevious) ||
@@ -231,7 +231,7 @@ bool mcbpmf_api_state_is_empty(McbpmfApiInputState* _state) {
 
 // TODO: serialize peek_xxx into gvariants to prevent multiple castings
 const char* mcbpmf_api_state_peek_buf(McbpmfApiInputState* _state) {
-  auto state = _state->body;
+  auto state = reinterpret_cast<McBopomofo::InputState*>(_state);
   // McBopomofoEngine::handleInputtingState
   if (auto nonempty = __MSTATE_CAST_TO(state, NotEmpty)) {
     return nonempty->composingBuffer.c_str();
@@ -244,7 +244,7 @@ const char* mcbpmf_api_state_peek_buf(McbpmfApiInputState* _state) {
 }
 
 int mcbpmf_api_state_peek_index(McbpmfApiInputState* _state) {
-  auto state = _state->body;
+  auto state = reinterpret_cast<McBopomofo::InputState*>(_state);
   // McBopomofoEngine::handleInputtingState
   if (auto nonempty = __MSTATE_CAST_TO(state, NotEmpty)) {
     return nonempty->cursorIndex;
@@ -253,7 +253,7 @@ int mcbpmf_api_state_peek_index(McbpmfApiInputState* _state) {
 }
 
 const char* mcbpmf_api_state_peek_tooltip(McbpmfApiInputState* _state) {
-  auto state = _state->body;
+  auto state = reinterpret_cast<McBopomofo::InputState*>(_state);
   if (auto nonempty = __MSTATE_CAST_TO(state, NotEmpty)) {
     return nonempty->tooltip.c_str();
   }
@@ -262,7 +262,7 @@ const char* mcbpmf_api_state_peek_tooltip(McbpmfApiInputState* _state) {
 
 // TODO: return a slice of it
 GPtrArray* mcbpmf_api_state_get_candidates(McbpmfApiInputState* _state) {
-  auto state = _state->body;
+  auto state = reinterpret_cast<McBopomofo::InputState*>(_state);
   if (auto choosing = __MSTATE_CAST_TO(state, ChoosingCandidate)) {
     auto& cs = choosing->candidates;
     auto ret = g_ptr_array_new_full(cs.size() * 2, nullptr);

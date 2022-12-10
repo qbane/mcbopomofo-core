@@ -10,9 +10,6 @@ G_DECLARE_FINAL_TYPE(McbpmfApiCore, mcbpmf_api_core, MCBPMF_API, CORE, GObject)
 #define MCBPMF_API_TYPE_KEYDEF (mcbpmf_api_keydef_get_type())
 G_DECLARE_FINAL_TYPE(McbpmfApiKeyDef, mcbpmf_api_keydef, MCBPMF_API, KEYDEF, GObject)
 
-#define MCBPMF_API_TYPE_INPUT_STATE (mcbpmf_api_input_state_get_type())
-G_DECLARE_FINAL_TYPE(McbpmfApiInputState, mcbpmf_api_input_state, MCBPMF_API, INPUT_STATE, GObject)
-
 G_BEGIN_DECLS
 
 typedef struct _McbpmfApiCore McbpmfApiCore;
@@ -26,7 +23,6 @@ typedef enum {
 
 McbpmfApiCore* mcbpmf_api_core_new(void);
 void mcbpmf_api_core_init_(McbpmfApiCore*, const char* lm_path);
-void mcbpmf_api_core_destroy(McbpmfApiCore*);
 
 McbpmfApiInputState* mcbpmf_api_core_get_state(McbpmfApiCore*);
 void mcbpmf_api_core_set_state(McbpmfApiCore*, McbpmfApiInputState*);
@@ -36,7 +32,6 @@ bool mcbpmf_api_core_select_candidate(McbpmfApiCore*, int, McbpmfApiInputState**
 
 McbpmfApiKeyDef* mcbpmf_api_keydef_new_ascii(char c, unsigned char mods);
 McbpmfApiKeyDef* mcbpmf_api_keydef_new_named(int mkey, unsigned char mods);
-void mcbpmf_api_keydef_destroy(McbpmfApiKeyDef*);
 
 #define _MSTATE_TYPE_LIST          \
   X(EMPTY, Empty)                  \
@@ -55,7 +50,6 @@ typedef enum {
 #undef X
 } McbpmfInputStateType;
 
-static McbpmfApiInputState* mcbpmf_api_input_state_new(void*);
 McbpmfInputStateType mcbpmf_api_state_get_type(McbpmfApiInputState*);
 bool mcbpmf_api_state_is_empty(McbpmfApiInputState*);
 const char* mcbpmf_api_state_peek_buf(McbpmfApiInputState*);
