@@ -49,20 +49,23 @@ include_directories(Engine)
 include_directories(Engine/Gramambular)
 include_directories(Engine/Mandarin)
 
-set (MCBOPOMOFO_CORE_DIR ${CMAKE_CURRENT_BINARY_DIR}/tmp)
-file(MAKE_DIRECTORY ${MCBOPOMOFO_CORE_DIR})
+if (COMBINE_STATIC_LIBS)
+    set(MCBOPOMOFO_CORE_DIR ${CMAKE_CURRENT_BINARY_DIR}/tmp)
+    file(MAKE_DIRECTORY ${MCBOPOMOFO_CORE_DIR})
 
-# https://stackoverflow.com/a/37941544
-add_custom_target(combine_static_libs ALL
-  COMMAND ar -x $<TARGET_FILE:McBopomofoLib>
-  COMMAND ar -x $<TARGET_FILE:gramambular2_lib>
-  COMMAND ar -x $<TARGET_FILE:MandarinLib>
-  COMMAND ar -qcs ../libMcBopomofoCore.a *.o
-  WORKING_DIRECTORY ${MCBOPOMOFO_CORE_DIR}
-  DEPENDS McBopomofoLib gramambular2_lib MandarinLib)
-set_target_properties(combine_static_libs
-  PROPERTIES IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/libMcBopomofoCore.a)
+    # https://stackoverflow.com/a/37941544
+    add_custom_target(combine_static_libs ALL
+      COMMAND ar -x $<TARGET_FILE:McBopomofoLib>
+      COMMAND ar -x $<TARGET_FILE:gramambular2_lib>
+      COMMAND ar -x $<TARGET_FILE:MandarinLib>
+      COMMAND ar -qcs ../libMcBopomofoCore.a *.o
+      WORKING_DIRECTORY ${MCBOPOMOFO_CORE_DIR}
+      DEPENDS McBopomofoLib gramambular2_lib MandarinLib
+      COMMENT "Combining static libraries to libMcBopomofoCore.a...")
 
+    set_target_properties(combine_static_libs
+      PROPERTIES IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/libMcBopomofoCore.a)
+endif ()
 
 if (ENABLE_TEST)
     # Let CMake fetch Google Test for us.

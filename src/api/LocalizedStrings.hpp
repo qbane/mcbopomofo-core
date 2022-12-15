@@ -5,14 +5,6 @@ extern "C" {
 #include <glib/gi18n.h>
 }
 
-class DummyUserPhraseAdder : public McBopomofo::UserPhraseAdder {
- public:
-  void addUserPhrase(const std::string_view& reading,
-                     const std::string_view& phrase) {
-    std::cerr << fmt::format("Added [{0}]: [{1}]", reading, phrase) << std::endl;
-  }
-};
-
 class KeyHandlerLocalizedStrings : public McBopomofo::KeyHandler::LocalizedStrings {
  public:
   std::string cursorIsBetweenSyllables(

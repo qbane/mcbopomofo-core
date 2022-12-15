@@ -13,6 +13,7 @@ include(ECMSetupVersion)
 include(ECMUninstallTarget)
 
 option(ENABLE_TEST "Build Test" Off)
+option(COMBINE_STATIC_LIBS "Combine static libraries into a single ar" On)
 
 # Setup some compiler option that is generally useful and compatible with Fcitx 5 (C++17)
 # include("${FCITX_INSTALL_CMAKECONFIG_DIR}/Fcitx5Utils/Fcitx5CompilerSettings.cmake")

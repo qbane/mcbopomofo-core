@@ -10,18 +10,34 @@ extern "C" {
 }
 
 #include "LocalizedStrings.hpp"
+#include "UserPhraseAdderProxy.hpp"
 #include "../Key.h"
 #include "../KeyHandler.h"
-#include "../LanguageModelLoader.h"
 #include "McBopomofoLM.h"
 
 struct _McbpmfApiCore {
   GObject parent;
+  McBopomofo::McBopomofoLM* model;
   McBopomofo::KeyHandler* keyhandler;
-  std::unique_ptr<McBopomofo::InputState> state;
-  // const char* lm_path;
+  std::unique_ptr<McBopomofo::InputState> state = nullptr;
 };
 G_DEFINE_TYPE(McbpmfApiCore, mcbpmf_api_core, G_TYPE_OBJECT)
+
+typedef enum {
+  CORE_PROP_INPUT_MODE = 1,
+  CORE_PROP_SELECT_CAND_AFTER_CURSOR,
+  CORE_PROP_AUTO_ADVANCE_CURSOR,
+  CORE_PROP_ESC_CLEARS_BUFFER,
+  CORE_PROP_N,
+} McbpmfApiCoreProperty;
+
+typedef enum {
+  CORE_CUSTOM_PHRASE_ADDED,
+  CORE_SIG_N,
+} McbpmfApiCoreSignal;
+
+static GParamSpec* mcbpmf_api_core_properties[CORE_PROP_N] = { nullptr, };
+static guint mcbpmf_api_core_signals[CORE_SIG_N] = {};
 
 struct _McbpmfApiKeyDef {
   McBopomofo::Key* body;
@@ -41,58 +57,154 @@ G_DEFINE_BOXED_TYPE(McbpmfApiInputState, mcbpmf_api_input_state,
 #define __MSTATE_CAST_TO(x, t) (dynamic_cast<McBopomofo::InputStates::t*>(x))
 #define __MSTATE_CASTABLE(x, t) (__MSTATE_CAST_TO(x, t) != nullptr)
 
-McbpmfApiCore* mcbpmf_api_core_new(void) {
-  auto ret = reinterpret_cast<McbpmfApiCore*>(g_object_new(MCBPMF_API_TYPE_CORE, nullptr));
-  // from McBopomofoEngine::constructor, set as initial state
-  ret->state.reset(new McBopomofo::InputStates::Empty());
-  // ret->lm_path = lm_path;
-  return ret;
+static void mcbpmf_api_core_set_property(McbpmfApiCore*, McbpmfApiCoreProperty, const GValue*, GParamSpec*);
+static void mcbpmf_api_core_get_property(McbpmfApiCore*, McbpmfApiCoreProperty, GValue*, GParamSpec*);
+static void mcbpmf_api_core_finalize(GObject*);
+
+static void mcbpmf_api_core_class_init(McbpmfApiCoreClass* klass) {
+  GObjectClass* object_class = G_OBJECT_CLASS(klass);
+
+  object_class->set_property = reinterpret_cast<GObjectSetPropertyFunc>(mcbpmf_api_core_set_property);
+  object_class->get_property = reinterpret_cast<GObjectGetPropertyFunc>(mcbpmf_api_core_get_property);
+  object_class->finalize = mcbpmf_api_core_finalize;
+
+  mcbpmf_api_core_properties[CORE_PROP_INPUT_MODE] = g_param_spec_int(
+    "input-mode", "Input mode",
+    "The input mode to use (Set to 1 for plainBopomofo mode)",
+    0, 1, 0,
+    G_PARAM_READWRITE);
+
+  mcbpmf_api_core_properties[CORE_PROP_SELECT_CAND_AFTER_CURSOR] = g_param_spec_boolean(
+    "select-cand-after-cursor", "selectPhraseAfterCursorAsCandidate",
+    "When initiating a candidate selection, use the character right at cursor as the subject (default is the one before).",
+    false,
+    G_PARAM_WRITABLE);
+
+  mcbpmf_api_core_properties[CORE_PROP_AUTO_ADVANCE_CURSOR] = g_param_spec_boolean(
+    "auto-advance-cursor", "Advance cursor automatically",
+    "Whether to advance cursor immediately after selecting a candidate.",
+    false,
+    G_PARAM_WRITABLE);
+
+  mcbpmf_api_core_properties[CORE_PROP_ESC_CLEARS_BUFFER] = g_param_spec_boolean(
+    "esc-clears-buffer", "Esc clears the composing buffer",
+    "Whether to clear the entire composing buffer when Esc is pressed",
+    false,
+    G_PARAM_WRITABLE);
+
+  g_object_class_install_properties(object_class,
+    CORE_PROP_N,
+    mcbpmf_api_core_properties);
+
+  mcbpmf_api_core_signals[CORE_CUSTOM_PHRASE_ADDED] = g_signal_new(
+    "custom-phrase-added",
+    G_TYPE_FROM_CLASS(klass),
+    G_SIGNAL_RUN_LAST,
+    0,
+    nullptr, nullptr,
+    /* marshaller */ nullptr,
+    G_TYPE_NONE,
+    2,
+    G_TYPE_STRING, G_TYPE_STRING);
 }
 
-void mcbpmf_api_core_init_(McbpmfApiCore* _core, const char* lm_path) {
-  std::shared_ptr<McBopomofo::McBopomofoLM> lm(new McBopomofo::McBopomofoLM());
-  std::shared_ptr<McBopomofo::UserPhraseAdder> upa(new DummyUserPhraseAdder());
-  std::unique_ptr<McBopomofo::KeyHandler::LocalizedStrings> lstr(new KeyHandlerLocalizedStrings());
+static void mcbpmf_api_core_init(McbpmfApiCore*) {}
 
+static void mcbpmf_api_core_set_property(
+  McbpmfApiCore* core, McbpmfApiCoreProperty prop_id, const GValue* value, GParamSpec* pspec) {
+  switch (prop_id) {
+  case CORE_PROP_INPUT_MODE:
+    core->keyhandler->setInputMode(static_cast<McBopomofo::InputMode>(g_value_get_int(value)));
+    // TODO: reload model
+    break;
+  case CORE_PROP_SELECT_CAND_AFTER_CURSOR:
+    core->keyhandler->setSelectPhraseAfterCursorAsCandidate(g_value_get_boolean(value));
+    break;
+  case CORE_PROP_AUTO_ADVANCE_CURSOR:
+    core->keyhandler->setMoveCursorAfterSelection(g_value_get_boolean(value));
+    break;
+  case CORE_PROP_ESC_CLEARS_BUFFER:
+    core->keyhandler->setEscKeyClearsEntireComposingBuffer(g_value_get_boolean(value));
+    break;
+  default:
+    G_OBJECT_WARN_INVALID_PROPERTY_ID(core, prop_id, pspec);
+  }
+}
+
+static void mcbpmf_api_core_get_property(
+  McbpmfApiCore* core, McbpmfApiCoreProperty prop_id, GValue* value, GParamSpec* pspec) {
+  switch (prop_id) {
+  case CORE_PROP_INPUT_MODE:
+    g_value_set_int(value, static_cast<gint>(core->keyhandler->inputMode()));
+    // TODO: reload model
+    break;
+  default:
+    G_OBJECT_WARN_INVALID_PROPERTY_ID(core, prop_id, pspec);
+  }
+}
+
+void UserPhraseAdderProxy::addUserPhrase(const std::string_view& reading, const std::string_view& value) {
+  auto rs = g_strndup(reading.data(), reading.length());
+  auto rv = g_strndup(value.data(), value.length());
+  g_signal_emit(core_, mcbpmf_api_core_signals[CORE_CUSTOM_PHRASE_ADDED],
+    0, rs, rv);
+  g_free(rs);
+  g_free(rv);
+}
+
+McbpmfApiCore* mcbpmf_api_core_new(void) {
+  auto core = reinterpret_cast<McbpmfApiCore*>(g_object_new(MCBPMF_API_TYPE_CORE, nullptr));
+
+  std::shared_ptr<McBopomofo::McBopomofoLM> lm = std::make_shared<McBopomofo::McBopomofoLM>();
+  std::shared_ptr<McBopomofo::UserPhraseAdder> upa = std::make_shared<UserPhraseAdderProxy>(core);
+  std::unique_ptr<McBopomofo::KeyHandler::LocalizedStrings> lstr = std::make_unique<KeyHandlerLocalizedStrings>();
+
+  // configure lm
   lm->setPhraseReplacementEnabled(false);
   lm->setExternalConverterEnabled(false);
 
-  // McBopomofoEngine::constructor(fcitx instance)
+  // configure keyhandler
   // -- TODO: make lmmodelloader
-  auto core = new McBopomofo::KeyHandler(lm, upa, std::move(lstr));
-
-  // -- TODO: keyHandler::setOnAddNewPhrase and addScriptHook
-  core->setOnAddNewPhrase([](const std::string& phrase) {
-    std::cerr << fmt::format("khdl callback: added new phrase [{0}] !!", phrase) << std::endl;
-  });
-
-  // McBopomofoEngine::activate(entry, event)
-  // TODO: detect engine_name to set to PlainBopomofo
-  assert(core->inputMode() == McBopomofo::InputMode::McBopomofo);
-
-  // TODO: chttrans
-
-  core->setKeyboardLayout(Formosa::Mandarin::BopomofoKeyboardLayout::StandardLayout());
+  auto keyhandler = new McBopomofo::KeyHandler(lm, upa, std::move(lstr));
 
   // TODO: set user config
 
-  // -- TODO: languageModelLoader_->reloadUserModelsIfNeeded();
-  //    user phrases & excluded phrases
+  // -- TODO: chttrans
+  keyhandler->setKeyboardLayout(Formosa::Mandarin::BopomofoKeyboardLayout::StandardLayout());
+
+  // -- TODO: keyHandler::addScriptHook
+  keyhandler->setOnAddNewPhrase([core]([[maybe_unused]] const std::string& phrase) {});
+
+  // -- TODO: user phrases & excluded phrases
+
+  // configure core
+  core->model = lm.get();
+  core->keyhandler = keyhandler;
+  // -- from McBopomofoEngine::constructor, set as initial state
+  core->state.reset(new McBopomofo::InputStates::Empty());
+  return core;
+}
+
+void mcbpmf_api_core_load(McbpmfApiCore* core, const char* lm_path) {
+  // McBopomofoEngine::activate(entry, event)
+  // TODO: detect engine_name to set to PlainBopomofo
+  assert(core->keyhandler->inputMode() == McBopomofo::InputMode::McBopomofo);
 
   // -- languageModelLoader_->loadModelForMode(McBopomofo::InputMode::McBopomofo)
-  lm->loadLanguageModel(lm_path);
+  core->model->loadLanguageModel(lm_path);
 
-  if (!lm->isDataModelLoaded()) {
+  // -- TODO: languageModelLoader_->reloadUserModelsIfNeeded();
+
+  if (!core->model->isDataModelLoaded()) {
     // TODO: needs to export error reason from upstream
     g_error("Language model cannot be loaded!!");
   }
-
-  _core->keyhandler = core;
 }
 
 static void mcbpmf_api_core_finalize(GObject* _ptr) {
   auto *ptr = G_TYPE_CHECK_INSTANCE_CAST(_ptr, MCBPMF_API_TYPE_CORE, McbpmfApiCore);
-  delete ptr->state.release();
+  ptr->state.reset();
+  ptr->model = nullptr;
   delete ptr->keyhandler;
   G_OBJECT_CLASS(mcbpmf_api_core_parent_class)->finalize(_ptr);
 }
@@ -111,17 +223,12 @@ void mcbpmf_api_core_set_state(McbpmfApiCore* core, McbpmfApiInputState* _state)
   mcbpmf_api_input_state_unref(_state);
 }
 
-void mcbpmf_api_core_reset_state(McbpmfApiCore* core, bool full_reset) {
+void mcbpmf_api_core_reset_state(McbpmfApiCore* core, gboolean full_reset = true) {
   core->state.reset(new McBopomofo::InputStates::Empty());
   if (full_reset) {
     core->keyhandler->reset();
   }
 }
-
-static void mcbpmf_api_core_class_init(McbpmfApiCoreClass* klass) {
-  G_OBJECT_CLASS(klass)->finalize = mcbpmf_api_core_finalize;
-}
-static void mcbpmf_api_core_init(McbpmfApiCore*) {}
 
 // this method is private
 // size_t mcbpmf_api_key_handler_get_actual_cursor_pos(key_handler_t* khdl) {
@@ -129,8 +236,8 @@ static void mcbpmf_api_core_init(McbpmfApiCore*) {}
 // }
 
 // McBopomofoEngine::keyEvent
-bool mcbpmf_api_core_handle_key(
-  McbpmfApiCore* core, McbpmfApiKeyDef* key, McbpmfApiInputState** result, bool* has_error) {
+gboolean mcbpmf_api_core_handle_key(
+  McbpmfApiCore* core, McbpmfApiKeyDef* key, McbpmfApiInputState** result, gboolean* has_error) {
   // NOTE: go to candidate phase if state is InputStates::ChoosingCandidate
   // use "handleCandidateKeyEvent"
 
@@ -156,7 +263,7 @@ bool mcbpmf_api_core_handle_key(
 }
 
 // keyHandler::candidateSelected or keyHandler::candidatePanelCancelled
-bool mcbpmf_api_core_select_candidate(
+gboolean mcbpmf_api_core_select_candidate(
   McbpmfApiCore* core, int which, McbpmfApiInputState** result) {
   auto statePtr = __MSTATE_CAST_TO(core->state.get(), ChoosingCandidate);
   if (statePtr == nullptr) return false;
@@ -256,7 +363,7 @@ void mcbpmf_api_input_state_unref(McbpmfApiInputState* p) {
 // FIXME: it is hard to decouple the input state implementation from the
 // key handler, so we leave it an opaque pointer to the comsumer. Ideally
 // it should be a boxed type in terms of GObject.
-bool mcbpmf_api_state_is_empty(McbpmfApiInputState* _state) {
+gboolean mcbpmf_api_state_is_empty(McbpmfApiInputState* _state) {
   auto state = _state->body;
   // use "!__MSTATE_CASTABLE(state, NonEmpty)" will produce wrong result!
   return __MSTATE_CASTABLE(state, Empty) ||
