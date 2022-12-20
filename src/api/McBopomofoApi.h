@@ -3,6 +3,7 @@
 
 #include <glib-object.h>
 #include <glib.h>
+#include "McBopomofoApiEnums.h"
 
 #define MCBPMF_API_TYPE_CORE (mcbpmf_api_core_get_type())
 G_DECLARE_FINAL_TYPE(McbpmfApiCore, mcbpmf_api_core, MCBPMF_API, CORE, GObject)
@@ -16,13 +17,8 @@ typedef struct _McbpmfApiCore McbpmfApiCore;
 typedef struct _McbpmfApiKeyDef McbpmfApiKeyDef;
 typedef struct _McbpmfApiInputState McbpmfApiInputState;
 
-typedef enum {
-  MKEY_SHIFT_MASK = 1 << 0,
-  MKEY_CTRL_MASK = 1 << 1,
-} McbpmfApiKeyModifiers;
-
 McbpmfApiCore* mcbpmf_api_core_new(void);
-void mcbpmf_api_core_load(McbpmfApiCore*, const char* lm_path);
+gboolean mcbpmf_api_core_load_model(McbpmfApiCore*, const char* lm_path);
 
 McbpmfApiInputState* mcbpmf_api_core_get_state(McbpmfApiCore*);
 void mcbpmf_api_core_set_state(McbpmfApiCore*, McbpmfApiInputState*);
@@ -35,27 +31,10 @@ void mcbpmf_api_keydef_unref(McbpmfApiKeyDef* p);
 McbpmfApiKeyDef* mcbpmf_api_keydef_new_ascii(char c, unsigned char mods);
 McbpmfApiKeyDef* mcbpmf_api_keydef_new_named(int mkey, unsigned char mods);
 
-#define _MSTATE_TYPE_LIST          \
-  X(EMPTY, Empty)                  \
-  X(EIP, EmptyIgnoringPrevious)    \
-  X(COMMITTING, Committing)        \
-  X(INPUTTING, Inputting)          \
-  X(CANDIDATES, ChoosingCandidate) \
-  X(MARKING, Marking)
-
-#define _MSTATE_TYPE_TO_ENUM(name) G_PASTE(MSTATE_TYPE_, name)
-
-typedef enum {
-#define X(name, _) _MSTATE_TYPE_TO_ENUM(name),
-  _MSTATE_TYPE_LIST
-    MSTATE_TYPE_N
-#undef X
-} McbpmfInputStateType;
-
 McbpmfApiInputState* mcbpmf_api_input_state_ref(McbpmfApiInputState* p);
 void mcbpmf_api_input_state_unref(McbpmfApiInputState* p);
 
-McbpmfInputStateType mcbpmf_api_state_get_type(McbpmfApiInputState*);
+McbpmfApiInputStateType mcbpmf_api_state_get_type(McbpmfApiInputState*);
 gboolean mcbpmf_api_state_is_empty(McbpmfApiInputState*);
 const char* mcbpmf_api_state_peek_buf(McbpmfApiInputState*);
 int mcbpmf_api_state_peek_index(McbpmfApiInputState*);

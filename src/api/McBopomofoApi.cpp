@@ -27,7 +27,9 @@ typedef enum {
   CORE_PROP_INPUT_MODE = 1,
   CORE_PROP_SELECT_CAND_AFTER_CURSOR,
   CORE_PROP_AUTO_ADVANCE_CURSOR,
+  CORE_PROP_PUT_LOWERCASE_LETTERS_TO_BUFFER,
   CORE_PROP_ESC_CLEARS_BUFFER,
+  CORE_PROP_CTRL_ENTER_KEY,
   CORE_PROP_N,
 } McbpmfApiCoreProperty;
 
@@ -70,26 +72,45 @@ static void mcbpmf_api_core_class_init(McbpmfApiCoreClass* klass) {
 
   mcbpmf_api_core_properties[CORE_PROP_INPUT_MODE] = g_param_spec_int(
     "input-mode", "Input mode",
-    "The input mode to use (Set to 1 for plainBopomofo mode)",
+    "The input mode to use (Set to 1 for plainBopomofo mode).",
     0, 1, 0,
     G_PARAM_READWRITE);
 
+  // TODO: model paths
+
+  // selectPhraseAfterCursorAsCandidate
   mcbpmf_api_core_properties[CORE_PROP_SELECT_CAND_AFTER_CURSOR] = g_param_spec_boolean(
-    "select-cand-after-cursor", "selectPhraseAfterCursorAsCandidate",
-    "When initiating a candidate selection, use the character right at cursor as the subject (default is the one before).",
+    "select-cand-after-cursor", "Select phrase after cursor as candidate",
+    "When initiating a candidate selection, use the character right at cursor as the starting point (default is the one before).",
     false,
     G_PARAM_WRITABLE);
 
+  // moveCursorAfterSelection
   mcbpmf_api_core_properties[CORE_PROP_AUTO_ADVANCE_CURSOR] = g_param_spec_boolean(
-    "auto-advance-cursor", "Advance cursor automatically",
+    "auto-advance-cursor", "Advance cursor automatically after selection",
     "Whether to advance cursor immediately after selecting a candidate.",
     false,
     G_PARAM_WRITABLE);
 
-  mcbpmf_api_core_properties[CORE_PROP_ESC_CLEARS_BUFFER] = g_param_spec_boolean(
-    "esc-clears-buffer", "Esc clears the composing buffer",
-    "Whether to clear the entire composing buffer when Esc is pressed",
+  // putLowercaseLettersToComposingBuffer
+  mcbpmf_api_core_properties[CORE_PROP_PUT_LOWERCASE_LETTERS_TO_BUFFER] = g_param_spec_boolean(
+    "put-lower-letters-to-buffer", "Put lowercase letters to composing buffer",
+    "Allow lowercase letters (a-z) to be put into the composing buffer.",
     false,
+    G_PARAM_WRITABLE);
+
+  // escKeyClearsEntireComposingBuffer
+  mcbpmf_api_core_properties[CORE_PROP_ESC_CLEARS_BUFFER] = g_param_spec_boolean(
+    "esc-clears-buffer", "Esc key clears entire composing buffer",
+    "When the composing buffer is non-empty, pressing esc clears it.",
+    false,
+    G_PARAM_WRITABLE);
+
+  // ctrlEnterKey
+  mcbpmf_api_core_properties[CORE_PROP_CTRL_ENTER_KEY] = g_param_spec_enum(
+    "ctrl-enter-key", "Behavior of Ctrl-Enter key",
+    "What to do with the composing buffer when Ctrl-Enter is pressed.",
+    MCBPMF_API_TYPE_CTRL_ENTER_BEHAVIOR, 0,
     G_PARAM_WRITABLE);
 
   g_object_class_install_properties(object_class,
@@ -108,7 +129,9 @@ static void mcbpmf_api_core_class_init(McbpmfApiCoreClass* klass) {
     G_TYPE_STRING, G_TYPE_STRING);
 }
 
-static void mcbpmf_api_core_init(McbpmfApiCore*) {}
+static void mcbpmf_api_core_init(McbpmfApiCore* core) {
+  new(core) McbpmfApiCore;
+}
 
 static void mcbpmf_api_core_set_property(
   McbpmfApiCore* core, McbpmfApiCoreProperty prop_id, const GValue* value, GParamSpec* pspec) {
@@ -123,8 +146,14 @@ static void mcbpmf_api_core_set_property(
   case CORE_PROP_AUTO_ADVANCE_CURSOR:
     core->keyhandler->setMoveCursorAfterSelection(g_value_get_boolean(value));
     break;
+  case CORE_PROP_PUT_LOWERCASE_LETTERS_TO_BUFFER:
+    core->keyhandler->setPutLowercaseLettersToComposingBuffer(g_value_get_boolean(value));
+    break;
   case CORE_PROP_ESC_CLEARS_BUFFER:
     core->keyhandler->setEscKeyClearsEntireComposingBuffer(g_value_get_boolean(value));
+    break;
+  case CORE_PROP_CTRL_ENTER_KEY:
+    core->keyhandler->setCtrlEnterKeyBehavior(static_cast<McBopomofo::KeyHandlerCtrlEnter>(g_value_get_enum(value)));
     break;
   default:
     G_OBJECT_WARN_INVALID_PROPERTY_ID(core, prop_id, pspec);
@@ -144,12 +173,12 @@ static void mcbpmf_api_core_get_property(
 }
 
 void UserPhraseAdderProxy::addUserPhrase(const std::string_view& reading, const std::string_view& value) {
-  auto rs = g_strndup(reading.data(), reading.length());
-  auto rv = g_strndup(value.data(), value.length());
-  g_signal_emit(core_, mcbpmf_api_core_signals[CORE_CUSTOM_PHRASE_ADDED],
-    0, rs, rv);
-  g_free(rs);
-  g_free(rv);
+  auto sr = g_strndup(reading.data(), reading.length());
+  auto sv = g_strndup(value.data(), value.length());
+  g_signal_emit(this->core_, mcbpmf_api_core_signals[CORE_CUSTOM_PHRASE_ADDED],
+    0, sr, sv);
+  g_free(sr);
+  g_free(sv);
 }
 
 McbpmfApiCore* mcbpmf_api_core_new(void) {
@@ -185,7 +214,7 @@ McbpmfApiCore* mcbpmf_api_core_new(void) {
   return core;
 }
 
-void mcbpmf_api_core_load(McbpmfApiCore* core, const char* lm_path) {
+gboolean mcbpmf_api_core_load_model(McbpmfApiCore* core, const char* lm_path) {
   // McBopomofoEngine::activate(entry, event)
   // TODO: detect engine_name to set to PlainBopomofo
   assert(core->keyhandler->inputMode() == McBopomofo::InputMode::McBopomofo);
@@ -195,17 +224,15 @@ void mcbpmf_api_core_load(McbpmfApiCore* core, const char* lm_path) {
 
   // -- TODO: languageModelLoader_->reloadUserModelsIfNeeded();
 
-  if (!core->model->isDataModelLoaded()) {
-    // TODO: needs to export error reason from upstream
-    g_error("Language model cannot be loaded!!");
-  }
+  // TODO: needs to export error reason from upstream
+  return core->model->isDataModelLoaded();
 }
 
 static void mcbpmf_api_core_finalize(GObject* _ptr) {
   auto *ptr = G_TYPE_CHECK_INSTANCE_CAST(_ptr, MCBPMF_API_TYPE_CORE, McbpmfApiCore);
-  ptr->state.reset();
   ptr->model = nullptr;
   delete ptr->keyhandler;
+  ptr->~McbpmfApiCore();
   G_OBJECT_CLASS(mcbpmf_api_core_parent_class)->finalize(_ptr);
 }
 
@@ -320,7 +347,9 @@ void mcbpmf_api_keydef_unref(McbpmfApiKeyDef* p) {
 
 McbpmfApiKeyDef* mcbpmf_api_keydef_new_ascii(char c, unsigned char mods) {
   McbpmfApiKeyDef* p = g_slice_new0(McbpmfApiKeyDef);
-  p->body = new auto(McBopomofo::Key::asciiKey(c, mods & MKEY_SHIFT_MASK, mods & MKEY_CTRL_MASK));
+  p->body = new auto(McBopomofo::Key::asciiKey(c,
+    mods & MCBPMF_API_KEY_SHIFT_MASK,
+    mods & MCBPMF_API_KEY_CTRL_MASK));
   p->ref_count = 1;
   return p;
 }
@@ -328,16 +357,20 @@ McbpmfApiKeyDef* mcbpmf_api_keydef_new_ascii(char c, unsigned char mods) {
 McbpmfApiKeyDef* mcbpmf_api_keydef_new_named(int mkey, unsigned char mods) {
   g_return_val_if_fail(mkey > 0 && mkey < MKEY_LIST_LENGTH, nullptr);
   McbpmfApiKeyDef* p = g_slice_new0(McbpmfApiKeyDef);
-  p->body = new auto(McBopomofo::Key::namedKey(MKEY_LIST[mkey], mods & MKEY_SHIFT_MASK, mods & MKEY_CTRL_MASK));
+  p->body = new auto(McBopomofo::Key::namedKey(MKEY_LIST[mkey],
+    mods & MCBPMF_API_KEY_SHIFT_MASK,
+    mods & MCBPMF_API_KEY_CTRL_MASK));
   p->ref_count = 1;
   return p;
 }
 
-McbpmfInputStateType mcbpmf_api_state_get_type(McbpmfApiInputState* _ptr) {
+McbpmfApiInputStateType mcbpmf_api_state_get_type(McbpmfApiInputState* _ptr) {
   auto ptr = _ptr->body;
+  auto eclass = reinterpret_cast<GEnumClass*>(g_type_class_peek(mcbpmf_api_input_state_type_get_type()));
 #define X(name, elt)                   \
-  if (__MSTATE_CASTABLE(ptr, elt)) {   \
-    return _MSTATE_TYPE_TO_ENUM(name); \
+  if (__MSTATE_CASTABLE(ptr, elt)) {    \
+    return McbpmfApiInputStateType( \
+      g_enum_get_value_by_nick(eclass, #elt)->value); \
   }
   _MSTATE_TYPE_LIST
 #undef X

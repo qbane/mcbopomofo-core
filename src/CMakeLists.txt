@@ -11,6 +11,7 @@ add_subdirectory(Engine/Mandarin)
 
 set(MCBOPOMOFO_LIB_SOURCES
  api/McBopomofoApi.cpp
+ api/McBopomofoApiEnums.c
  KeyHandler.cpp
  UTF8Helper.cpp
  Engine/AssociatedPhrases.h
