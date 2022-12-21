@@ -70,11 +70,12 @@ static void mcbpmf_api_core_class_init(McbpmfApiCoreClass* klass) {
   object_class->get_property = reinterpret_cast<GObjectGetPropertyFunc>(mcbpmf_api_core_get_property);
   object_class->finalize = mcbpmf_api_core_finalize;
 
-  mcbpmf_api_core_properties[CORE_PROP_INPUT_MODE] = g_param_spec_int(
+  mcbpmf_api_core_properties[CORE_PROP_INPUT_MODE] = g_param_spec_enum(
     "input-mode", "Input mode",
-    "The input mode to use (Set to 1 for plainBopomofo mode).",
-    0, 1, 0,
-    G_PARAM_READWRITE);
+    "The input mode to use (classic or plainBopomofo mode).",
+    MCBPMF_API_TYPE_INPUT_MODE, MCBPMF_API_INPUT_MODE_CLASSIC,
+    G_PARAM_READABLE);
+  static_assert(MCBPMF_API_INPUT_MODE_CLASSIC == static_cast<gint>(McBopomofo::InputMode::McBopomofo));
 
   // TODO: model paths
 
@@ -110,8 +111,9 @@ static void mcbpmf_api_core_class_init(McbpmfApiCoreClass* klass) {
   mcbpmf_api_core_properties[CORE_PROP_CTRL_ENTER_KEY] = g_param_spec_enum(
     "ctrl-enter-key", "Behavior of Ctrl-Enter key",
     "What to do with the composing buffer when Ctrl-Enter is pressed.",
-    MCBPMF_API_TYPE_CTRL_ENTER_BEHAVIOR, 0,
+    MCBPMF_API_TYPE_CTRL_ENTER_BEHAVIOR, MCBPMF_API_CTRL_ENTER_NOOP,
     G_PARAM_WRITABLE);
+  static_assert(MCBPMF_API_CTRL_ENTER_NOOP == static_cast<gint>(McBopomofo::KeyHandlerCtrlEnter::Disabled));
 
   g_object_class_install_properties(object_class,
     CORE_PROP_N,

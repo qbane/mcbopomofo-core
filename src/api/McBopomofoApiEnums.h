@@ -6,6 +6,14 @@
 G_BEGIN_DECLS
 
 typedef enum {
+  MCBPMF_API_INPUT_MODE_CLASSIC,
+  MCBPMF_API_INPUT_MODE_PLAIN,
+} McbpmfApiInputMode;
+
+GType mcbpmf_api_input_mode_get_type(void);
+#define MCBPMF_API_TYPE_INPUT_MODE (mcbpmf_api_input_mode_get_type())
+
+typedef enum {
   MCBPMF_API_KEY_SHIFT_MASK = 1 << 0,
   MCBPMF_API_KEY_CTRL_MASK = 1 << 1,
 } McbpmfApiKeyModifiers;

@@ -41,6 +41,10 @@ type_name ## _get_type (void) { \
 
 #endif  /* G_DEFINE_ENUM_VALUE */
 
+G_DEFINE_ENUM_TYPE(McbpmfApiInputMode, mcbpmf_api_input_mode,
+  G_DEFINE_ENUM_VALUE(MCBPMF_API_KEY_SHIFT_MASK, "mc-bopomofo"),
+  G_DEFINE_ENUM_VALUE(MCBPMF_API_KEY_CTRL_MASK, "plain-bopomofo"))
+
 G_DEFINE_FLAGS_TYPE(McbpmfApiKeyModifiers, mcbpmf_api_key_modifiers,
   G_DEFINE_ENUM_VALUE(MCBPMF_API_KEY_SHIFT_MASK, "shift"),
   G_DEFINE_ENUM_VALUE(MCBPMF_API_KEY_CTRL_MASK, "ctrl"))
