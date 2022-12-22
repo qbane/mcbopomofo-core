@@ -25,9 +25,10 @@ G_DEFINE_TYPE(McbpmfApiCore, mcbpmf_api_core, G_TYPE_OBJECT)
 
 typedef enum {
   CORE_PROP_INPUT_MODE = 1,
+  CORE_PROP_KEYBOARD_LAYOUT,
   CORE_PROP_SELECT_CAND_AFTER_CURSOR,
   CORE_PROP_AUTO_ADVANCE_CURSOR,
-  CORE_PROP_PUT_LOWERCASE_LETTERS_TO_BUFFER,
+  CORE_PROP_PUT_LCASE_LETTERS_TO_BUFFER,
   CORE_PROP_ESC_CLEARS_BUFFER,
   CORE_PROP_CTRL_ENTER_KEY,
   CORE_PROP_N,
@@ -74,10 +75,15 @@ static void mcbpmf_api_core_class_init(McbpmfApiCoreClass* klass) {
     "input-mode", "Input mode",
     "The input mode to use (classic or plainBopomofo mode).",
     MCBPMF_API_TYPE_INPUT_MODE, MCBPMF_API_INPUT_MODE_CLASSIC,
-    G_PARAM_READABLE);
+    G_PARAM_READWRITE);
   static_assert(MCBPMF_API_INPUT_MODE_CLASSIC == static_cast<gint>(McBopomofo::InputMode::McBopomofo));
 
-  // TODO: model paths
+  // keyboardLayout
+  mcbpmf_api_core_properties[CORE_PROP_KEYBOARD_LAYOUT] = g_param_spec_enum(
+    "keyboard-layout", "Keyboard layout",
+    "The keyboard layout to use for typing bopomofo.",
+    MCBPMF_API_TYPE_KEYBOARD_LAYOUT, MCBPMF_API_KEYBOARD_LAYOUT_STANDARD,
+    G_PARAM_WRITABLE);
 
   // selectPhraseAfterCursorAsCandidate
   mcbpmf_api_core_properties[CORE_PROP_SELECT_CAND_AFTER_CURSOR] = g_param_spec_boolean(
@@ -94,8 +100,8 @@ static void mcbpmf_api_core_class_init(McbpmfApiCoreClass* klass) {
     G_PARAM_WRITABLE);
 
   // putLowercaseLettersToComposingBuffer
-  mcbpmf_api_core_properties[CORE_PROP_PUT_LOWERCASE_LETTERS_TO_BUFFER] = g_param_spec_boolean(
-    "put-lower-letters-to-buffer", "Put lowercase letters to composing buffer",
+  mcbpmf_api_core_properties[CORE_PROP_PUT_LCASE_LETTERS_TO_BUFFER] = g_param_spec_boolean(
+    "put-lcase-letters-to-buffer", "Put lowercase letters to composing buffer",
     "Allow lowercase letters (a-z) to be put into the composing buffer.",
     false,
     G_PARAM_WRITABLE);
@@ -135,12 +141,28 @@ static void mcbpmf_api_core_init(McbpmfApiCore* core) {
   new(core) McbpmfApiCore;
 }
 
+static auto _to_formosana_keyboard_layout(gint index) {
+  #define _BPMF_KB_LAYOUT(x) (Formosa::Mandarin::BopomofoKeyboardLayout::x())
+  static const Formosa::Mandarin::BopomofoKeyboardLayout* coll[] = {
+    _BPMF_KB_LAYOUT(StandardLayout),
+    _BPMF_KB_LAYOUT(ETenLayout),
+    _BPMF_KB_LAYOUT(HsuLayout),
+    _BPMF_KB_LAYOUT(ETen26Layout),
+    _BPMF_KB_LAYOUT(IBMLayout),
+    _BPMF_KB_LAYOUT(HanyuPinyinLayout),
+  };
+  #undef _BPMF_KB_LAYOUT
+  return coll[index];
+}
+
 static void mcbpmf_api_core_set_property(
   McbpmfApiCore* core, McbpmfApiCoreProperty prop_id, const GValue* value, GParamSpec* pspec) {
   switch (prop_id) {
   case CORE_PROP_INPUT_MODE:
-    core->keyhandler->setInputMode(static_cast<McBopomofo::InputMode>(g_value_get_int(value)));
-    // TODO: reload model
+    core->keyhandler->setInputMode(static_cast<McBopomofo::InputMode>(g_value_get_enum(value)));
+    break;
+  case CORE_PROP_KEYBOARD_LAYOUT:
+    core->keyhandler->setKeyboardLayout(_to_formosana_keyboard_layout(g_value_get_enum(value)));
     break;
   case CORE_PROP_SELECT_CAND_AFTER_CURSOR:
     core->keyhandler->setSelectPhraseAfterCursorAsCandidate(g_value_get_boolean(value));
@@ -148,7 +170,7 @@ static void mcbpmf_api_core_set_property(
   case CORE_PROP_AUTO_ADVANCE_CURSOR:
     core->keyhandler->setMoveCursorAfterSelection(g_value_get_boolean(value));
     break;
-  case CORE_PROP_PUT_LOWERCASE_LETTERS_TO_BUFFER:
+  case CORE_PROP_PUT_LCASE_LETTERS_TO_BUFFER:
     core->keyhandler->setPutLowercaseLettersToComposingBuffer(g_value_get_boolean(value));
     break;
   case CORE_PROP_ESC_CLEARS_BUFFER:
@@ -166,8 +188,7 @@ static void mcbpmf_api_core_get_property(
   McbpmfApiCore* core, McbpmfApiCoreProperty prop_id, GValue* value, GParamSpec* pspec) {
   switch (prop_id) {
   case CORE_PROP_INPUT_MODE:
-    g_value_set_int(value, static_cast<gint>(core->keyhandler->inputMode()));
-    // TODO: reload model
+    g_value_set_enum(value, static_cast<gint>(core->keyhandler->inputMode()));
     break;
   default:
     G_OBJECT_WARN_INVALID_PROPERTY_ID(core, prop_id, pspec);

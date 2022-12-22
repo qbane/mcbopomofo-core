@@ -42,8 +42,8 @@ type_name ## _get_type (void) { \
 #endif  /* G_DEFINE_ENUM_VALUE */
 
 G_DEFINE_ENUM_TYPE(McbpmfApiInputMode, mcbpmf_api_input_mode,
-  G_DEFINE_ENUM_VALUE(MCBPMF_API_KEY_SHIFT_MASK, "mc-bopomofo"),
-  G_DEFINE_ENUM_VALUE(MCBPMF_API_KEY_CTRL_MASK, "plain-bopomofo"))
+  G_DEFINE_ENUM_VALUE(MCBPMF_API_INPUT_MODE_CLASSIC, "mc-bopomofo"),
+  G_DEFINE_ENUM_VALUE(MCBPMF_API_INPUT_MODE_PLAIN, "plain-bopomofo"))
 
 G_DEFINE_FLAGS_TYPE(McbpmfApiKeyModifiers, mcbpmf_api_key_modifiers,
   G_DEFINE_ENUM_VALUE(MCBPMF_API_KEY_SHIFT_MASK, "shift"),
@@ -54,6 +54,14 @@ G_DEFINE_ENUM_TYPE(McbpmfApiInputStateType, mcbpmf_api_input_state_type,
   _MSTATE_TYPE_LIST
   G_DEFINE_ENUM_VALUE(MSTATE_TYPE_N, "type-last"))
 #undef X
+
+G_DEFINE_ENUM_TYPE(McbpmfApiKeyboardLayout, mcbpmf_api_keyboard_layout,
+  G_DEFINE_ENUM_VALUE(MCBPMF_API_KEYBOARD_LAYOUT_STANDARD, "standard"),
+  G_DEFINE_ENUM_VALUE(MCBPMF_API_KEYBOARD_LAYOUT_ETEN, "eten"),
+  G_DEFINE_ENUM_VALUE(MCBPMF_API_KEYBOARD_LAYOUT_HSU, "hsu"),
+  G_DEFINE_ENUM_VALUE(MCBPMF_API_KEYBOARD_LAYOUT_ET26, "et26"),
+  G_DEFINE_ENUM_VALUE(MCBPMF_API_KEYBOARD_LAYOUT_HANYUPINYIN, "hanyupinyin"),
+  G_DEFINE_ENUM_VALUE(MCBPMF_API_KEYBOARD_LAYOUT_IBM, "ibm"))
 
 G_DEFINE_ENUM_TYPE(McbpmfApiCtrlEnterBehavior, mcbpmf_api_ctrl_enter_behavior,
   G_DEFINE_ENUM_VALUE(MCBPMF_API_CTRL_ENTER_NOOP, "noop"),
