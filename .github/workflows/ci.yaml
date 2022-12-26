@@ -35,7 +35,7 @@ jobs:
           make runMcBopomofoLMLibTest
       - uses: actions/upload-artifact@v3
         with:
-          name: libs
+          name: libs-ubuntu22
           path: |
             build/src/**/*.a
             src/api/*.h
@@ -65,7 +65,7 @@ jobs:
           make runTest
       - uses: actions/upload-artifact@v3
         with:
-          name: libs
+          name: libs-ubuntu20
           path: |
             build/src/**/*.a
             src/api/*.h
