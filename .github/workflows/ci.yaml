@@ -35,8 +35,10 @@ jobs:
           make runMcBopomofoLMLibTest
       - uses: actions/upload-artifact@v3
         with:
-          name: build-dir
-          path: build/
+          name: libs
+          path: |
+            build/src/**/*.a
+            src/api/*.h
 
   build_ubuntu_20:
     runs-on: ubuntu-latest
@@ -63,5 +65,7 @@ jobs:
           make runTest
       - uses: actions/upload-artifact@v3
         with:
-          name: build-dir
-          path: build/
+          name: libs
+          path: |
+            build/src/**/*.a
+            src/api/*.h
