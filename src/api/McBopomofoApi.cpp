@@ -387,16 +387,20 @@ McbpmfApiKeyDef* mcbpmf_api_keydef_new_named(int mkey, unsigned char mods) {
   return p;
 }
 
-McbpmfApiInputStateType mcbpmf_api_state_get_type(McbpmfApiInputState* _ptr) {
-  auto ptr = _ptr->body;
-  auto eclass = reinterpret_cast<GEnumClass*>(g_type_class_peek(mcbpmf_api_input_state_type_get_type()));
-#define X(name, elt)                   \
-  if (__MSTATE_CASTABLE(ptr, elt)) {    \
-    return McbpmfApiInputStateType( \
-      g_enum_get_value_by_nick(eclass, #elt)->value); \
+McbpmfApiInputStateType mcbpmf_api_state_get_type(McbpmfApiInputState* _state) {
+  auto ptr = _state->body;
+  auto eclass = reinterpret_cast<GEnumClass*>(
+    g_type_class_ref(mcbpmf_api_input_state_type_get_type()));
+#define X(name, elt)                                   \
+  if (__MSTATE_CASTABLE(ptr, elt)) {                   \
+    auto t = McbpmfApiInputStateType(                  \
+       g_enum_get_value_by_nick(eclass, #elt)->value); \
+    g_type_class_unref(eclass);                        \
+    return t;                                          \
   }
   _MSTATE_TYPE_LIST
 #undef X
+  g_type_class_unref(eclass);
   return MSTATE_TYPE_N;
 }
 
