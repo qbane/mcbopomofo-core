@@ -30,7 +30,7 @@ typedef enum {
   CORE_PROP_AUTO_ADVANCE_CURSOR,
   CORE_PROP_PUT_LCASE_LETTERS_TO_BUFFER,
   CORE_PROP_ESC_CLEARS_BUFFER,
-  CORE_PROP_CTRL_ENTER_KEY,
+  CORE_PROP_CTRL_ENTER_BEHAVIOR,
   CORE_PROP_N,
 } McbpmfApiCoreProperty;
 
@@ -114,8 +114,8 @@ static void mcbpmf_api_core_class_init(McbpmfApiCoreClass* klass) {
     G_PARAM_WRITABLE);
 
   // ctrlEnterKey
-  mcbpmf_api_core_properties[CORE_PROP_CTRL_ENTER_KEY] = g_param_spec_enum(
-    "ctrl-enter-key", "Behavior of Ctrl-Enter key",
+  mcbpmf_api_core_properties[CORE_PROP_CTRL_ENTER_BEHAVIOR] = g_param_spec_enum(
+    "ctrl-enter-behavior", "Behavior of Ctrl-Enter key",
     "What to do with the composing buffer when Ctrl-Enter is pressed.",
     MCBPMF_API_TYPE_CTRL_ENTER_BEHAVIOR, MCBPMF_API_CTRL_ENTER_NOOP,
     G_PARAM_WRITABLE);
@@ -148,8 +148,8 @@ static auto _to_formosana_keyboard_layout(gint index) {
     _BPMF_KB_LAYOUT(ETenLayout),
     _BPMF_KB_LAYOUT(HsuLayout),
     _BPMF_KB_LAYOUT(ETen26Layout),
-    _BPMF_KB_LAYOUT(IBMLayout),
     _BPMF_KB_LAYOUT(HanyuPinyinLayout),
+    _BPMF_KB_LAYOUT(IBMLayout),
   };
   #undef _BPMF_KB_LAYOUT
   return coll[index];
@@ -176,7 +176,7 @@ static void mcbpmf_api_core_set_property(
   case CORE_PROP_ESC_CLEARS_BUFFER:
     core->keyhandler->setEscKeyClearsEntireComposingBuffer(g_value_get_boolean(value));
     break;
-  case CORE_PROP_CTRL_ENTER_KEY:
+  case CORE_PROP_CTRL_ENTER_BEHAVIOR:
     core->keyhandler->setCtrlEnterKeyBehavior(static_cast<McBopomofo::KeyHandlerCtrlEnter>(g_value_get_enum(value)));
     break;
   default:
