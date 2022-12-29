@@ -364,7 +364,7 @@ void mcbpmf_api_keydef_unref(McbpmfApiKeyDef* p) {
   g_return_if_fail(p->ref_count > 0);
   if (g_atomic_int_dec_and_test(&p->ref_count)) {
     delete p->body;
-    g_free(p);
+    g_slice_free(McbpmfApiKeyDef, p);
   }
 }
 
@@ -416,7 +416,7 @@ void mcbpmf_api_input_state_unref(McbpmfApiInputState* p) {
   g_return_if_fail(p->ref_count > 0);
   if (g_atomic_int_dec_and_test(&p->ref_count)) {
     if (!p->is_static) delete p->body;
-    g_free(p);
+    g_slice_free(McbpmfApiInputState, p);
   }
 }
 
