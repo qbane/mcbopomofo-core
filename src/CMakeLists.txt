@@ -87,8 +87,7 @@ if (ENABLE_TEST)
         add_executable(McBopomofoTest
                 KeyHandlerTest.cpp)
         target_compile_options(McBopomofoTest PRIVATE -Wno-unknown-pragmas)
-        target_link_libraries(McBopomofoTest PRIVATE Fcitx5::Core gtest_main gmock_main McBopomofoLib)
-        target_include_directories(McBopomofoTest PRIVATE Fcitx5::Core)
+        target_link_libraries(McBopomofoTest PRIVATE gtest_main gmock_main McBopomofoLib)
 
         configure_file(../data/data.txt mcbopomofo-test-data.txt)
 
