@@ -6,8 +6,7 @@ find_package(Gettext REQUIRED)
 # for McBopomofoApi
 find_package(GLIB2 REQUIRED)
 
-add_subdirectory(Engine/gramambular2)
-add_subdirectory(Engine/Mandarin)
+add_subdirectory(Engine)
 
 set(MCBOPOMOFO_LIB_SOURCES
  api/McBopomofoApi.cpp
@@ -69,34 +68,35 @@ if (COMBINE_STATIC_LIBS)
 endif ()
 
 if (ENABLE_TEST)
-    # Let CMake fetch Google Test for us.
-    # https://github.com/google/googletest/tree/main/googletest#incorporating-into-an-existing-cmake-project
-    include(FetchContent)
+        # Let CMake fetch Google Test for us.
+        # https://github.com/google/googletest/tree/main/googletest#incorporating-into-an-existing-cmake-project
+        include(FetchContent)
 
-    FetchContent_Declare(
-            googletest
-            # Specify the commit you depend on and update it regularly.
-            URL https://github.com/google/googletest/archive/609281088cfefc76f9d0ce82e1ff6c30cc3591e5.zip
-    )
-    # For Windows: Prevent overriding the parent project's compiler/linker settings
-    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-    FetchContent_MakeAvailable(googletest)
+        FetchContent_Declare(
+                googletest
+                # Specify the commit you depend on and update it regularly.
+                URL https://github.com/google/googletest/archive/609281088cfefc76f9d0ce82e1ff6c30cc3591e5.zip
+        )
+        # For Windows: Prevent overriding the parent project's compiler/linker settings
+        set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+        FetchContent_MakeAvailable(googletest)
 
-    include(GoogleTest)
+        include(GoogleTest)
 
-    # Test target declarations.
-    add_executable(McBopomofoTest
-            KeyHandlerTest.cpp)
-    target_compile_options(McBopomofoTest PRIVATE -Wno-unknown-pragmas)
-    target_link_libraries(McBopomofoTest PRIVATE gtest_main gmock_main McBopomofoLib)
+        # Test target declarations.
+        add_executable(McBopomofoTest
+                KeyHandlerTest.cpp)
+        target_compile_options(McBopomofoTest PRIVATE -Wno-unknown-pragmas)
+        target_link_libraries(McBopomofoTest PRIVATE Fcitx5::Core gtest_main gmock_main McBopomofoLib)
+        target_include_directories(McBopomofoTest PRIVATE Fcitx5::Core)
 
-    configure_file(../data/data.txt mcbopomofo-test-data.txt)
+        configure_file(../data/data.txt mcbopomofo-test-data.txt)
 
-    gtest_discover_tests(McBopomofoTest)
+        gtest_discover_tests(McBopomofoTest)
 
-    add_custom_target(
-            runTest
-            COMMAND ${CMAKE_CURRENT_BINARY_DIR}/McBopomofoTest
-    )
-    add_dependencies(runTest McBopomofoTest)
+        add_custom_target(
+                runTest
+                COMMAND ${CMAKE_CURRENT_BINARY_DIR}/McBopomofoTest
+        )
+        add_dependencies(runTest McBopomofoTest)
 endif ()

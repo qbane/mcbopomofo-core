@@ -20,7 +20,7 @@ jobs:
         run: |
           mkdir -p build
           cd build
-          cmake ../ -DCMAKE_INSTALL_PREFIX=/usr -DENABLE_TEST=On
+          cmake ../ -DCMAKE_INSTALL_PREFIX=/usr/local -DENABLE_TEST=On
           make -j
           cd ../
           mkdir -p src/Engine/build
@@ -30,9 +30,7 @@ jobs:
       - name: Test
         run: |
           cd build
-          make runTest runGramambular2Test
-          cd ../src/Engine/build
-          make runMcBopomofoLMLibTest
+          make runTest runGramambular2Test runMcBopomofoLMLibTest
       - uses: actions/upload-artifact@v3
         with:
           name: libs-ubuntu22
@@ -62,7 +60,7 @@ jobs:
       - name: Test
         run: |
           cd build
-          make runTest
+          make runTest runGramambular2Test runMcBopomofoLMLibTest
       - uses: actions/upload-artifact@v3
         with:
           name: libs-ubuntu20
