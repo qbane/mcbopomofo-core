@@ -317,7 +317,6 @@ gboolean mcbpmf_api_core_select_candidate(
   McbpmfApiCore* core, int which, McbpmfApiInputState** result) {
   auto statePtr = __MSTATE_CAST_TO(core->state.get(), ChoosingCandidate);
   if (statePtr == nullptr) return false;
-  auto& cands = statePtr->candidates;
 
   auto cb = [&](std::unique_ptr<McBopomofo::InputState> next) {
     if (*result != nullptr) { mcbpmf_api_input_state_unref(*result); }
@@ -330,8 +329,9 @@ gboolean mcbpmf_api_core_select_candidate(
     // candidate list is dismissed
     core->keyhandler->candidatePanelCancelled(cb);
   } else {
+    auto& cands = statePtr->candidates;
     // which must be an index in the candidate list
-    if (static_cast<size_t>(which) > cands.size()) return false;
+    if (static_cast<size_t>(which) >= cands.size()) return false;
     auto& cand = cands[which];
     core->keyhandler->candidateSelected(cand, cb);
   }
