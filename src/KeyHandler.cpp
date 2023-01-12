@@ -190,14 +190,14 @@ bool KeyHandler::handle(Key key, McBopomofo::InputState* state,
       walk();
       stateCallback(buildInputtingState());
     } else {
+      std::string buffer = "";
       if (grid_.length()) {
         auto inputtingState = buildInputtingState();
         // Steal the composingBuffer built by the inputting state.
-        auto committingState = std::make_unique<InputStates::Committing>(
-            inputtingState->composingBuffer);
-        stateCallback(std::move(committingState));
+        buffer = inputtingState->composingBuffer;
       }
-      auto committingState = std::make_unique<InputStates::Committing>(" ");
+      buffer += " ";
+      auto committingState = std::make_unique<InputStates::Committing>(buffer);
       stateCallback(std::move(committingState));
       reset();
     }
@@ -372,13 +372,10 @@ bool KeyHandler::handle(Key key, McBopomofo::InputState* state,
 
         // First, commit what's already in the composing buffer.
         auto inputtingState = buildInputtingState();
-        // Steal the composingBuffer built by the inputting state.
-        auto committingState = std::make_unique<InputStates::Committing>(
-            inputtingState->composingBuffer);
-        stateCallback(std::move(committingState));
-
-        // Then we commit that single character.
-        stateCallback(std::make_unique<InputStates::Committing>(chrStr));
+        // Steal the composingBuffer built by the inputting state, then
+        // Append that single character.
+        auto buffer = inputtingState->composingBuffer + chrStr;
+        stateCallback(std::make_unique<InputStates::Committing>(buffer));
         reset();
       }
       return true;
